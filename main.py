@@ -16,11 +16,17 @@ después de hoy — no existen ventas del futuro.
 import os
 from datetime import date, timedelta
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import APIKeyHeader
 
 from datos_maestros import APERTURA
 from generador import generar_ventas_del_dia
+
+# En local, carga API_KEY desde el archivo .env (que no se sube al repo).
+# En Vercel no hace nada: ahí no existe .env, la variable ya la pone la
+# plataforma directamente en el entorno.
+load_dotenv()
 
 app = FastAPI(title="API de ventas — Kiosco La Esquina")
 
