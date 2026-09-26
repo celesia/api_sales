@@ -13,9 +13,11 @@ El negocio "abrió" el 2026-09-01: no hay datos antes de esa fecha, ni
 después de hoy — no existen ventas del futuro.
 """
 
+import os
 from datetime import date, timedelta
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import APIKeyHeader
 
 from datos_maestros import APERTURA
 from generador import generar_ventas_del_dia
@@ -23,6 +25,22 @@ from generador import generar_ventas_del_dia
 app = FastAPI(title="API de ventas — Kiosco La Esquina")
 
 TOPE_DIAS = 31
+
+# La key vive en una variable de entorno (en Vercel: Project Settings ->
+# Environment Variables), nunca en el código. Este repo va a estar público
+# en GitHub como parte del proyecto del bootcamp, así que la URL de la API
+# también va a quedar visible ahí — sin esto, cualquiera podría consumir
+# la cuota gratuita de Vercel sin que sirva de nada.
+API_KEY = os.environ["API_KEY"]
+_api_key_header = APIKeyHeader(name="X-API-Key")
+
+
+def _verificar_api_key(key: str = Depends(_api_key_header)) -> None:
+    # Si falta el header, APIKeyHeader devuelve None acá (no corta antes
+    # con 403) — por eso el mismo chequeo cubre tanto "falta" como
+    # "vino pero está mal": las dos situaciones dan 401.
+    if key != API_KEY:
+        raise HTTPException(401, "API key inválida o faltante")
 
 
 def _hoy() -> date:
@@ -34,10 +52,10 @@ def _hoy() -> date:
 
 @app.get("/")
 def raiz():
-    return {"mensaje": "API de ventas de Kiosco La Esquina. Ver /docs o GET /ventas."}
+    return {"mensaje": "API de ventas de Kiosco La Esquina. Ver /docs o GET /ventas (requiere API key)."}
 
 
-@app.get("/ventas")
+@app.get("/ventas", dependencies=[Depends(_verificar_api_key)])
 def ventas(fecha: date | None = None, desde: date | None = None, hasta: date | None = None):
     hoy = _hoy()
 
