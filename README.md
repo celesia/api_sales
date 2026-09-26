@@ -61,29 +61,45 @@ Errores (siempre 400, salvo fecha con formato inválido que da 422):
 
 **Nota:** `precio_lista` (lo que costaba el producto ese día en el catálogo) y `precio_unitario` (lo que realmente se cobró en esa venta) son campos distintos a propósito — la diferencia es el descuento. También conviven dos formas de representar "algo salió mal": `cantidad` en 0 o negativa es un error de carga (suciedad, para practicar limpieza), mientras que `estado_venta = "devolucion"` es un hecho de negocio real modelado como una fila nueva, nunca como una corrección de la fila original.
 
+## Autenticación
+
+El endpoint `/ventas` exige un header `X-API-Key` con un valor secreto. La key nunca está en el código ni en el repo: se lee de la variable de entorno `API_KEY`. Sin key o con una incorrecta, responde 401.
+
+Esto existe porque el repo del pipeline que consume esta API va a estar público en GitHub, y la URL de Vercel va a quedar visible ahí — sin una key, cualquiera podría pegarle al endpoint y gastar la cuota gratuita de Vercel sin que sirva de nada.
+
+```bash
+curl -H "X-API-Key: <tu-key>" "https://<tu-deploy>.vercel.app/ventas?fecha=2026-09-10"
+```
+
+En `/docs`, el botón "Authorize" (candado) permite cargar la key una sola vez y probar todo desde ahí.
+
 ## Correr en local
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
+export API_KEY="lo-que-elijas-en-local"
 pytest
 uvicorn main:app --reload
 ```
 
-Después, `http://127.0.0.1:8000/docs` para probarla desde el navegador.
+Después, `http://127.0.0.1:8000/docs` para probarla desde el navegador (usá la misma key que exportaste).
 
 ## Estructura
 
 ```
-main.py              # FastAPI y el único endpoint /ventas
+main.py              # FastAPI, el endpoint /ventas y la validación de la API key
 datos_maestros.py    # sucursales, productos, empleados, métodos de pago
 generador.py         # toda la lógica de generación, sin FastAPI adentro
 tests/
+├── conftest.py         # define una API key de prueba antes de importar main
 ├── test_generador.py   # determinismo, catálogos, suciedad/outliers
-└── test_api.py         # contrato HTTP: parámetros, rangos, errores
+└── test_api.py         # contrato HTTP: parámetros, rangos, errores, API key
 ```
 
 ## Despliegue
 
 Desplegada en Vercel (función Python serverless, sin configuración adicional: `main.py` en la raíz con una instancia `app` es un patrón que Vercel detecta solo). Conectada al repo de GitHub para desplegar automáticamente en cada push a `main`.
+
+**Antes del primer deploy**, hay que configurar la variable de entorno en Vercel: Project Settings → Environment Variables → agregar `API_KEY` con un valor secreto (por ejemplo, generado con `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`). Sin esto, el deploy va a fallar al arrancar porque `main.py` lee `os.environ["API_KEY"]` apenas se importa.
